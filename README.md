@@ -18,7 +18,7 @@ Here's an example turning standard input and output into a server. Not extremely
 
 ```go
 type stream struct {
-	io.ReadCloser
+	io.Reader
 	io.WriteCloser
 }
 
