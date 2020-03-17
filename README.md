@@ -8,7 +8,7 @@ Simple TCP server:
 
 ```go
 srv := &Server{Addr: ":7111", Handler: func(conn net.Conn, payload []byte) {
-  t.Logf("From %s: %s", conn.RemoteAddr(), payload)
+	fmt.Printf("From %s: %s\n", conn.RemoteAddr(), payload)
 }}
 srv.ListenAndServe()
 ```
@@ -23,10 +23,10 @@ type stream struct {
 }
 
 s := &stream{os.Stdin, os.Stdout}
-ln := ListenIO(stream) // make a net.Listener
+ln := ListenIO(s) // make a net.Listener
 
 srv := &Server{Handler: func(conn net.Conn, payload []byte) {
-  t.Logf("From %s: %s", conn.RemoteAddr(), payload)
+	fmt.Printf("From %s: %s\n", conn.RemoteAddr(), payload)
 }}
 srv.Serve(ln)
 ```
