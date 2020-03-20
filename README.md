@@ -7,8 +7,8 @@ Server implements a generic network server in Go. This is just a simple time sav
 Simple TCP server:
 
 ```go
-srv := &Server{Addr: ":7111", Handler: func(conn net.Conn, payload []byte) {
-	fmt.Printf("From %s: %s\n", conn.RemoteAddr(), payload)
+srv := &Server{Addr: ":7111", Handler: HandlerFunc(func(conn net.Conn, r *Request) {
+	fmt.Printf("From %s: %s\n", conn.RemoteAddr(), r.Data)
 }}
 srv.ListenAndServe()
 ```
@@ -25,8 +25,8 @@ type stream struct {
 s := &stream{os.Stdin, os.Stdout}
 ln := ListenIO(s) // make a net.Listener
 
-srv := &Server{Handler: func(conn net.Conn, payload []byte) {
-	fmt.Printf("From %s: %s\n", conn.RemoteAddr(), payload)
+srv := &Server{Handler: HandlerFunc(func(conn net.Conn, r *Request) {
+	fmt.Printf("From %s: %s\n", conn.RemoteAddr(), r.Data)
 }}
 srv.Serve(ln)
 ```

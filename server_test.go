@@ -13,10 +13,10 @@ func TestServer(t *testing.T) {
 	ln := ListenIO(&testRwc{r, w})
 
 	ns := &Server{
-		Handler: func(conn net.Conn, payload []byte) {
-			t.Logf("From %s: %s", conn.RemoteAddr(), payload)
+		Handler: HandlerFunc(func(conn net.Conn, r *Request) {
+			t.Logf("From %s: %s", conn.RemoteAddr(), r.Data)
 			//conn.Close()
-		},
+		}),
 	}
 
 	go func() {

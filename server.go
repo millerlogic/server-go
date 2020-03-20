@@ -22,7 +22,7 @@ type Server struct {
 
 	// Handler is called with each split from ConnSplit.
 	// Empty splits are skipped.
-	Handler func(conn net.Conn, payload []byte)
+	Handler Handler
 
 	// BaseContext gets the base context (optional)
 	BaseContext func(net.Listener) context.Context
@@ -272,7 +272,45 @@ func serveConn(ctx context.Context, conn net.Conn, srv *Server) {
 	for scan.Scan() {
 		payload := scan.Bytes()
 		if len(payload) > 0 {
-			srv.Handler(conn, payload)
+			srv.Handler.ServeData(conn, &Request{Data: payload, ctx: ctx})
 		}
 	}
+}
+
+// Handler for a single split payload.
+type Handler interface {
+	ServeData(conn net.Conn, r *Request)
+}
+
+// HandlerFunc is a convenience wrapper to use a func as a Handler.
+type HandlerFunc func(conn net.Conn, r *Request)
+
+// ServeData calls f(conn, r)
+func (f HandlerFunc) ServeData(conn net.Conn, r *Request) {
+	f(conn, r)
+}
+
+// Request is for a single split payload.
+type Request struct {
+	Data []byte
+	ctx  context.Context
+}
+
+// Context returns the context; also see WithContext.
+func (r *Request) Context() context.Context {
+	if r.ctx != nil {
+		return r.ctx
+
+	}
+	return context.Background()
+}
+
+// WithContext returns a new Request with the specified context.
+func (r *Request) WithContext(ctx context.Context) *Request {
+	if ctx == nil {
+		panic("ctx == nil")
+	}
+	r2 := *r
+	r2.ctx = ctx
+	return &r2
 }
