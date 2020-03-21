@@ -122,14 +122,12 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 		select {
 		case <-ticker.C:
 			srv.mx.Lock()
-			nconns := len(srv.conns)
-			srv.mx.Unlock()
-			if nconns == 0 {
-				srv.mx.Lock()
+			if len(srv.conns) == 0 {
 				srv.closeDoneChanLocked()
 				srv.mx.Unlock()
 				return nil
 			}
+			srv.mx.Unlock()
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-srv.doneChan:
@@ -241,13 +239,13 @@ func (srv *Server) Serve(ln net.Listener) error {
 		}
 		numErrors = 0
 
+		srv.mx.Lock()
 		if srv.isShuttingDown() {
+			srv.mx.Unlock()
 			conn.Close()
 			<-srv.doneChan
 			return ErrServerClosed
 		}
-
-		srv.mx.Lock()
 		srv.conns = append(srv.conns, conn)
 		srv.mx.Unlock()
 
