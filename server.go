@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,7 +48,11 @@ type Server struct {
 
 	// MaxConns is the maximum number of concurrent client connections.
 	// Defaults to DefaultMaxConns.
+	// This can be updated in the NewConn callback, but not in the other callbacks.
+	// Setting this to -1 will block future new connections, but allow the existing ones.
 	MaxConns int
+
+	shuttingDown int32 // atomic
 
 	doneChan chan struct{}
 
@@ -79,6 +84,8 @@ func (srv *Server) AppendConns(buf []net.Conn) []net.Conn {
 
 // Close the server.
 func (srv *Server) Close() error {
+	atomic.StoreInt32(&srv.shuttingDown, 1)
+
 	srv.mx.Lock()
 	defer srv.mx.Unlock()
 
@@ -100,6 +107,8 @@ func (srv *Server) Close() error {
 // Shutdown the server by first waiting for all the connections to close gracefully,
 // or stops waiting when the ctx is done.
 func (srv *Server) Shutdown(ctx context.Context) error {
+	atomic.StoreInt32(&srv.shuttingDown, 1)
+
 	srv.mx.Lock()
 	if srv.ln == nil {
 		return errors.New("not serving")
@@ -128,6 +137,10 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 		}
 	}
 
+}
+
+func (srv *Server) isShuttingDown() bool {
+	return atomic.LoadInt32(&srv.shuttingDown) != 0
 }
 
 func (srv *Server) closeDoneChanLocked() {
@@ -190,7 +203,16 @@ func (srv *Server) Serve(ln net.Listener) error {
 	numErrors := 0
 	for {
 		for srv.NumConns() >= srv.MaxConns {
-			time.Sleep(250 * time.Millisecond)
+			select {
+			case <-srv.doneChan:
+				return ErrServerClosed
+			case <-time.After(250 * time.Millisecond):
+			}
+		}
+
+		if srv.isShuttingDown() {
+			<-srv.doneChan
+			return ErrServerClosed
 		}
 
 		conn, err := ln.Accept()
@@ -218,6 +240,12 @@ func (srv *Server) Serve(ln net.Listener) error {
 			return err
 		}
 		numErrors = 0
+
+		if srv.isShuttingDown() {
+			conn.Close()
+			<-srv.doneChan
+			return ErrServerClosed
+		}
 
 		srv.mx.Lock()
 		srv.conns = append(srv.conns, conn)
