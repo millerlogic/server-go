@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -14,10 +15,20 @@ func TestServer(t *testing.T) {
 	ln := ListenIO(&testRwc{r, w})
 
 	ns := &Server{
+		NewConn: func(ctx context.Context, conn net.Conn) context.Context {
+			t.Logf("New conn: %s", conn.RemoteAddr())
+			return ctx
+		},
 		Handler: HandlerFunc(func(conn net.Conn, r *Request) {
 			t.Logf("From %s: %s", conn.RemoteAddr(), r.Data)
 			//conn.Close()
 		}),
+		ConnClosed: func(ctx context.Context, conn net.Conn, err error) {
+			t.Logf("Conn closed: %s", conn.RemoteAddr())
+			if err != nil && err != io.ErrClosedPipe {
+				t.Error(err)
+			}
+		},
 	}
 
 	go func() {
@@ -33,6 +44,7 @@ func TestServer(t *testing.T) {
 	if err != nil && err != ErrServerClosed {
 		t.Fatal(err)
 	}
+	t.Log("Done serving")
 }
 
 type testRwc struct {
