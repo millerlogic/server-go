@@ -21,7 +21,6 @@ type Server struct {
 	Addr string
 
 	// Handler is called with each split from ConnSplit.
-	// Empty splits are skipped.
 	Handler Handler
 
 	// BaseContext gets the base context (optional)
@@ -283,10 +282,8 @@ func serveConn(ctx context.Context, conn net.Conn, srv *Server) {
 	scan.Buffer(nil, srv.MaxScanTokenSize)
 	scan.Split(srv.ConnSplit)
 	for scan.Scan() {
-		payload := scan.Bytes()
-		if len(payload) > 0 {
-			srv.Handler.ServeData(conn, &Request{Data: payload, ctx: ctx})
-		}
+		data := scan.Bytes()
+		srv.Handler.ServeData(conn, &Request{Data: data, ctx: ctx})
 	}
 }
 

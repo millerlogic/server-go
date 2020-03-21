@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestServer(t *testing.T) {
@@ -21,7 +22,9 @@ func TestServer(t *testing.T) {
 
 	go func() {
 		fmt.Fprintf(w, "hello\n")
+		fmt.Fprintf(w, "\n")
 		fmt.Fprintf(w, "world\n")
+		time.Sleep(20 * time.Millisecond)
 		t.Log("done writing, closing server")
 		ns.Close()
 	}()
