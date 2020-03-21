@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -21,6 +22,7 @@ type Server struct {
 	Addr string
 
 	// Handler is called with each split from ConnSplit.
+	// Each connection gets its own goroutine to read and call the handler.
 	Handler Handler
 
 	// BaseContext gets the base context (optional)
@@ -28,6 +30,11 @@ type Server struct {
 
 	// NewConn is called for each new conn, returns the per-connection context (optional)
 	NewConn func(ctx context.Context, conn net.Conn) context.Context
+
+	// ConnClosed is called when a connection is closed.
+	// Called from the same goroutine as the conn handler.
+	// err is nil if no error.
+	ConnClosed func(ctx context.Context, conn net.Conn, err error)
 
 	// ConnSplit is a function which splits up the individual messages.
 	// The default is bufio.ScanLines. See bufio.SplitFunc for more info.
@@ -159,6 +166,10 @@ func (srv *Server) Serve(ln net.Listener) error {
 			return ctx
 		}
 	}
+	if srv.ConnClosed == nil {
+		srv.ConnClosed = func(ctx context.Context, conn net.Conn, err error) {
+		}
+	}
 	if srv.ConnSplit == nil {
 		srv.ConnSplit = bufio.ScanLines
 	}
@@ -273,10 +284,33 @@ func (oc *closeOnceListener) close() {
 	oc.err = oc.Listener.Close()
 }
 
+type panicErr struct {
+	r interface{}
+}
+
+func (err *panicErr) Error() string {
+	return fmt.Sprintf("panic: %v", err.r)
+}
+
+func (err *panicErr) Recover() interface{} {
+	return err.r
+}
+
+func (err *panicErr) Unwrap() error {
+	rerr, _ := err.r.(error)
+	return rerr
+}
+
 func serveConn(ctx context.Context, conn net.Conn, srv *Server) {
+	var closeErr error
 	defer func() {
 		srv.removeConn(conn)
 		conn.Close()
+		if r := recover(); r != nil {
+			// Overwrite closeErr if panic.
+			closeErr = &panicErr{r}
+		}
+		srv.ConnClosed(ctx, conn, closeErr)
 	}()
 	scan := bufio.NewScanner(conn)
 	scan.Buffer(nil, srv.MaxScanTokenSize)
@@ -285,6 +319,7 @@ func serveConn(ctx context.Context, conn net.Conn, srv *Server) {
 		data := scan.Bytes()
 		srv.Handler.ServeData(conn, &Request{Data: data, ctx: ctx})
 	}
+	closeErr = scan.Err()
 }
 
 // Handler for a single split payload.
