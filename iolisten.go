@@ -19,24 +19,14 @@ func ListenIO(rwc io.ReadWriteCloser) *IOListener {
 		doneChan: make(chan struct{}),
 	}
 	ln.conn = ioConn{stream: rwc, ln: ln}
+	ln.addr.str = getInputName(rwc)
 	return ln
-}
-
-type nameAddr struct {
-	str string
-}
-
-func (addr *nameAddr) Network() string {
-	return ""
-}
-
-func (addr *nameAddr) String() string {
-	return addr.str
 }
 
 // IOListener is a net.Listener on a ReadWriteCloser; see ListenIO.
 type IOListener struct {
 	conn     ioConn
+	addr     nameAddr
 	mx       sync.Mutex
 	doneChan chan struct{}
 	accepted bool
@@ -70,7 +60,7 @@ func (ln *IOListener) Close() error {
 
 // Addr gets the name of the stream.
 func (ln *IOListener) Addr() net.Addr {
-	return &nameAddr{ln.conn.getName()}
+	return &ln.addr
 }
 
 type ioConn struct {
@@ -97,19 +87,12 @@ func (conn *ioConn) Write(p []byte) (int, error) {
 	return conn.stream.Write(p)
 }
 
-func (conn *ioConn) getName() string {
-	if namer, ok := conn.stream.(interface{ Name() string }); ok {
-		return namer.Name()
-	}
-	return "input"
-}
-
 func (conn *ioConn) LocalAddr() net.Addr {
-	return &nameAddr{conn.getName()}
+	return &conn.ln.addr
 }
 
 func (conn *ioConn) RemoteAddr() net.Addr {
-	return &nameAddr{conn.getName()}
+	return &conn.ln.addr
 }
 
 func (conn *ioConn) Close() error {
@@ -152,4 +135,23 @@ func (conn *ioConn) SetWriteDeadline(t time.Time) error {
 		return x.SetWriteDeadline(t)
 	}
 	return os.ErrNoDeadline
+}
+
+func getInputName(r io.Reader) string {
+	if namer, ok := r.(interface{ Name() string }); ok {
+		return namer.Name()
+	}
+	return "input"
+}
+
+type nameAddr struct {
+	str string
+}
+
+func (addr *nameAddr) Network() string {
+	return ""
+}
+
+func (addr *nameAddr) String() string {
+	return addr.str
 }
