@@ -29,6 +29,8 @@ type Server struct {
 	BaseContext func(net.Listener) context.Context
 
 	// NewConn is called for each new conn, returns the per-connection context (optional)
+	// Avoid panic in NewConn; it will bubble up from the Serve call and
+	// render the Server invalid, requiring Close.
 	NewConn func(ctx context.Context, conn net.Conn) context.Context
 
 	// ConnClosed is called when a connection is closed.
@@ -96,7 +98,7 @@ func (srv *Server) Close() error {
 }
 
 // Shutdown the server by first waiting for all the connections to close gracefully,
-// or stops waiting when teh ctx is done.
+// or stops waiting when the ctx is done.
 func (srv *Server) Shutdown(ctx context.Context) error {
 	srv.mx.Lock()
 	if srv.ln == nil {
