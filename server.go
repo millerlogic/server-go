@@ -56,6 +56,19 @@ func (srv *Server) NumConns() int {
 	return n
 }
 
+// Conns gets the net.Conn list.
+func (srv *Server) Conns() []net.Conn {
+	return srv.AppendConns(nil)
+}
+
+// AppendConns appends the net.Conn list to buf and returns the updated slice.
+func (srv *Server) AppendConns(buf []net.Conn) []net.Conn {
+	srv.mx.RLock()
+	x := append(buf, srv.conns...)
+	srv.mx.RUnlock()
+	return x
+}
+
 // Close the server.
 func (srv *Server) Close() error {
 	srv.mx.Lock()
