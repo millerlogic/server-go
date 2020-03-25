@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -267,19 +268,14 @@ func (srv *Server) removeConn(conn net.Conn) {
 	}
 }
 
-// ListenAndServe listens and serves based on srv.Addr:
-// * TCP socket at host:port, or
-// * a random TCP port on localhost if empty, or
-// * a UNIX domain socket if containing a slash.
-// Also see Serve.
-func (srv *Server) ListenAndServe() error {
+func (srv *Server) listen() (net.Listener, error) {
 	addr := srv.Addr
 	var ln net.Listener
 	if strings.IndexByte(addr, '/') != -1 {
 		var err error
 		ln, err = net.Listen("unix", addr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		if addr == "" {
@@ -288,13 +284,41 @@ func (srv *Server) ListenAndServe() error {
 		var err error
 		ln, err = net.Listen("tcp", addr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if srv.Addr == "" {
 			srv.Addr = ln.Addr().String()
 		}
 	}
+	return ln, nil
+}
+
+// ListenAndServe listens and serves based on srv.Addr:
+// * TCP socket at host:port, or
+// * a random TCP port on localhost if empty, or
+// * a UNIX domain socket if containing a slash.
+// Also see Serve.
+func (srv *Server) ListenAndServe() error {
+	ln, err := srv.listen()
+	if err != nil {
+		return err
+	}
 	return srv.Serve(ln)
+}
+
+// ListenAndServeTLS is ListenAndServe for TLS.
+func (srv *Server) ListenAndServeTLS(certFile, keyFile string) error {
+	ln, err := srv.listen()
+	if err != nil {
+		return err
+	}
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return err
+	}
+	tlsconfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+	lntls := tls.NewListener(ln, tlsconfig)
+	return srv.Serve(lntls)
 }
 
 type closeOnceListener struct {
