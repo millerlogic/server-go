@@ -2,7 +2,9 @@
 
 
 # server-go
-Server implements a generic network server in Go. This is just a simple time saver so you don't have to implement yet another server. By default the client protocol is line-delimited, but any valid split function can be used.
+Server implements a generic network server in Go. This is just a simple time saver so you don't have to implement yet another server.
+By default the client protocol is line-delimited, but any valid [split function](https://godoc.org/bufio#SplitFunc) can be used.
+NewConn is always called in the goroutine which called Serve (or ListenAndServe). Afterwards, each connection runs in its own goroutine, so the Handler func can be called concurrently but only for different connections. 
 
 Simple TCP server:
 
